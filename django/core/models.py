@@ -1,8 +1,8 @@
+from uuid import uuid4
+
 from django.conf import settings
 from django.db import models
-from django.db.models.aggregates import (
-    Sum
-)
+from django.db.models.aggregates import Sum
 
 
 class PersonManager(models.Manager):
@@ -41,6 +41,25 @@ class Person(models.Model):
                 self.first_name,
                 self.born)
 
+def movie_directory_path_with_uuid(
+        instance, filename):
+    return '{}/{}.{}'.format(
+        instance.movie_id,
+        uuid4(),
+        filename.split('.')[-1]
+    )
+
+
+class MovieImage(models.Model):
+    image = models.ImageField(
+        upload_to=movie_directory_path_with_uuid)
+    uploaded = models.DateTimeField(
+        auto_now_add=True)
+    movie = models.ForeignKey(
+        'Movie', on_delete=models.CASCADE)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE)
 
 class MovieManager(models.Manager):
 
@@ -58,13 +77,10 @@ class MovieManager(models.Manager):
 
     def top_movies(self):
         qs = self.get_queryset()
-        qs = qs.annotate(
-                vote_sum=Sum(
-                    'vote__value'))
-        qs = qs.exclude(
-            vote_sum=None)
-        qs = qs.order_by(
-            '-vote_sum')
+        qs = qs.annotate( vote_sum=Sum('vote__value'))
+        qs = qs.exclude(vote_sum=None)
+        qs = qs.order_by('-vote_sum')
+        # qs = qs[:limit]
         return qs
 
 class Movie(models.Model):

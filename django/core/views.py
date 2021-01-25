@@ -1,21 +1,68 @@
 # from django.shortcuts import render
-from django.contrib.auth.mixins import (
-    LoginRequiredMixin)
-from django.core.exceptions import (
-    PermissionDenied)
+import logging
+
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.cache import cache
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+from django.views.decorators.vary import vary_on_cookie
 from django.views.generic import ListView, DetailView, UpdateView, CreateView
 
-from core.forms import VoteForm    
-from core.models import Movie, Person, \
-    Vote
+from core.forms import VoteForm, MovieImageForm 
+from core.mixins import CachePageVaryOnCookieMixin
+from core.models import Movie, Person, Vote
 
 # Tampilan ini akan otomatis terhubung ke template
 # template = html + variabel2 dari model-movie
-class MovieList(ListView):
+logger = logging.getLogger(__name__)
+
+class CreateVote(LoginRequiredMixin, CreateView):
+    form_class = VoteForm
+
+    def get_initial(self):
+        initial = super().get_initial()
+        initial['user'] = self.request.user.id
+        initial['movie'] = self.kwargs[
+            'movie_id']
+        return initial
+
+    def get_success_url(self):
+        movie_id = self.object.movie.id
+        return reverse(
+            'core:MovieDetail',
+            kwargs={
+                'pk': movie_id})
+
+    def render_to_response(self, context, **response_kwargs):
+        movie_id = context['object'].id
+        movie_detail_url = reverse(
+            'core:MovieDetail',
+            kwargs={'pk': movie_id})
+        return redirect(
+            to=movie_detail_url)
+
+class MovieList(CachePageVaryOnCookieMixin, ListView):
     model = Movie
     paginate_by = 10
+
+class TopMovies(ListView):
+    template_name = 'core/top_movies_list.html'
+
+    def get_queryset(self):
+        limit = 10
+        key = 'top_movies_%s'
+        # % limit
+        # cached_qs = cache.get(key)
+        # if cached_qs:
+        #     same_django = cached_qs._django_version == django.get_version()
+        #     if same_django:
+        #         return cached_qs
+        qs = Movie.objects.top_movies()
+        cache.set(key, qs)
+        return qs
 
 class PersonDetail(DetailView):
     queryset = Person.objects.all_with_prefetch_movies()
@@ -50,6 +97,35 @@ class MovieDetail(DetailView):
                 vote_form_url
         return ctx
     
+    def movie_image_form(self):
+        if self.request.user.is_authenticated:
+            return MovieImageForm()
+        return None
+
+class MovieImageUpload(LoginRequiredMixin, CreateView):
+    form_class = MovieImageForm
+
+    def get_initial(self):
+        initial = super().get_initial()
+        initial['user'] = self.request.user.id
+        initial['movie'] = self.kwargs['movie_id']
+        return initial
+
+    def render_to_response(self, context, **response_kwargs):
+        movie_id = self.kwargs['movie_id']
+        movie_detail_url = reverse(
+            'core:MovieDetail',
+            kwargs={'pk': movie_id})
+        return redirect(
+            to=movie_detail_url)
+
+    def get_success_url(self):
+        movie_id = self.kwargs['movie_id']
+        movie_detail_url = reverse(
+            'core:MovieDetail',
+            kwargs={'pk': movie_id})
+        return movie_detail_url
+
 class UpdateVote(LoginRequiredMixin, UpdateView):
     form_class = VoteForm
     queryset = Vote.objects.all()
@@ -79,30 +155,7 @@ class UpdateVote(LoginRequiredMixin, UpdateView):
             to=movie_detail_url)
 
 
-class CreateVote(LoginRequiredMixin, CreateView):
-    form_class = VoteForm
 
-    def get_initial(self):
-        initial = super().get_initial()
-        initial['user'] = self.request.user.id
-        initial['movie'] = self.kwargs[
-            'movie_id']
-        return initial
-
-    def get_success_url(self):
-        movie_id = self.object.movie.id
-        return reverse(
-            'core:MovieDetail',
-            kwargs={
-                'pk': movie_id})
-
-    def render_to_response(self, context, **response_kwargs):
-        movie_id = context['object'].id
-        movie_detail_url = reverse(
-            'core:MovieDetail',
-            kwargs={'pk': movie_id})
-        return redirect(
-            to=movie_detail_url)
 
 
 # Create your views here.
