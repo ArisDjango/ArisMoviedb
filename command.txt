@@ -1,0 +1,27 @@
+
+Set-ExecutionPolicy Unrestricted -Scope Process
+& d:/TUTORIAL/PYTHON/ArisMoviedb/venv/Scripts/Activate.ps1
+
+pip install django psycopg2
+django-admin startproject config
+
+cd django
+python manage.py startapp core
+
+psql -U postgres -h localhost
+
+cd django
+python manage.py makemigrations core
+python manage.py migrate core
+
+python manage.py dbshell
+\dt
+python manage.py migrate
+
+python manage.py shell
+
+cd django
+python manage.py createsuperuser
+
+python manage.py runserver
+
